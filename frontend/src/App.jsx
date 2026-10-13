@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Route, Routes } from 'react-router-dom'
+import { Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom'
+import api from './api/client'
 import './App.css'
 
 const navigation = [
@@ -36,6 +37,8 @@ const activityFeed = [
 ]
 
 function App() {
+  const [user, setUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [theme, setTheme] = useState(() => {
     const savedTheme = localStorage.getItem('taskflow-theme')
     if (savedTheme) return savedTheme
@@ -43,19 +46,223 @@ function App() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   })
 
+  const navigate = useNavigate()
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem('taskflow-theme', theme)
   }, [theme])
 
+  useEffect(() => {
+    const bootstrapAuth = async () => {
+      const accessToken = localStorage.getItem('taskflow-access-token')
+      if (!accessToken) {
+        setUser(null)
+        setAuthLoading(false)
+        return
+      }
+
+      try {
+        const { data } = await api.get('/auth/me/')
+        setUser(data)
+      } catch (error) {
+        localStorage.removeItem('taskflow-access-token')
+        localStorage.removeItem('taskflow-refresh-token')
+        setUser(null)
+      } finally {
+        setAuthLoading(false)
+      }
+    }
+
+    bootstrapAuth()
+  }, [])
+
+  const handleLogin = async (credentials) => {
+    const { data } = await api.post('/auth/login/', credentials)
+    localStorage.setItem('taskflow-access-token', data.access)
+    localStorage.setItem('taskflow-refresh-token', data.refresh)
+
+    const { data: currentUser } = await api.get('/auth/me/')
+    setUser(currentUser)
+    navigate('/')
+  }
+
+  const handleRegister = async (payload) => {
+    await api.post('/auth/register/', payload)
+    await handleLogin({ username: payload.username, password: payload.password })
+  }
+
+  const handleLogout = async () => {
+    const refreshToken = localStorage.getItem('taskflow-refresh-token')
+
+    if (refreshToken) {
+      try {
+        await api.post('/auth/logout/', { refresh: refreshToken })
+      } catch (error) {
+        console.warn('Logout request failed, continuing local cleanup.', error)
+      }
+    }
+
+    localStorage.removeItem('taskflow-access-token')
+    localStorage.removeItem('taskflow-refresh-token')
+    setUser(null)
+    navigate('/login')
+  }
+
+  if (authLoading) {
+    return <div className="loading-screen">Loading workspace...</div>
+  }
+
+  return (
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          user ? (
+            <Navigate to="/" replace />
+          ) : (
+            <AuthPage mode="login" onLogin={handleLogin} onRegister={handleRegister} />
+          )
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          user ? (
+            <Navigate to="/" replace />
+          ) : (
+            <AuthPage mode="register" onLogin={handleLogin} onRegister={handleRegister} />
+          )
+        }
+      />
+      <Route
+        path="*"
+        element={
+          user ? (
+            <AuthenticatedApp user={user} onLogout={handleLogout} setTheme={setTheme} theme={theme} />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+    </Routes>
+  )
+}
+
+function AuthPage({ mode, onLogin, onRegister }) {
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+  })
+  const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const navigate = useNavigate()
+  const isRegister = mode === 'register'
+
+  const handleChange = (event) => {
+    const { name, value } = event.target
+    setFormData((current) => ({ ...current, [name]: value }))
+  }
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+    setError('')
+    setIsSubmitting(true)
+
+    try {
+      if (isRegister) {
+        await onRegister(formData)
+      } else {
+        await onLogin(formData)
+      }
+    } catch (err) {
+      const message = err.response?.data?.detail || err.response?.data?.message || 'Authentication failed. Please try again.'
+      setError(message)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="auth-page">
+      <div className="auth-panel">
+        <div className="auth-brand">
+          <div className="brand-mark">TF</div>
+          <div>
+            <p className="eyebrow">Portfolio workspace</p>
+            <h1>TaskFlow</h1>
+          </div>
+        </div>
+
+        <div className="auth-toggle">
+          <button type="button" className={!isRegister ? 'active' : ''} onClick={() => navigate('/login')}>
+            Login
+          </button>
+          <button type="button" className={isRegister ? 'active' : ''} onClick={() => navigate('/register')}>
+            Register
+          </button>
+        </div>
+
+        <form className="auth-form" onSubmit={handleSubmit}>
+          {isRegister && (
+            <label>
+              Email
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="you@example.com"
+                required
+              />
+            </label>
+          )}
+
+          <label>
+            Username
+            <input
+              type="text"
+              name="username"
+              value={formData.username}
+              onChange={handleChange}
+              placeholder="username"
+              required
+            />
+          </label>
+
+          <label>
+            Password
+            <input
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              placeholder="Enter a secure password"
+              required
+            />
+          </label>
+
+          {error && <p className="auth-error">{error}</p>}
+
+          <button type="submit" className="primary-button" disabled={isSubmitting}>
+            {isSubmitting ? 'Please wait...' : isRegister ? 'Create account' : 'Sign in'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function AuthenticatedApp({ user, onLogout, theme, setTheme }) {
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand-block">
           <div className="brand-mark">TF</div>
           <div>
-            <p className="eyebrow">Portfolio project</p>
-            <h1>TaskFlow</h1>
+            <p className="eyebrow">Welcome back</p>
+            <h1>{user.username}</h1>
           </div>
         </div>
 
@@ -76,6 +283,9 @@ function App() {
           <p className="muted-label">This week</p>
           <strong>7 milestones</strong>
           <span>3 due within 48 hours</span>
+          <button type="button" className="logout-button" onClick={onLogout}>
+            Log out
+          </button>
         </div>
       </aside>
 
