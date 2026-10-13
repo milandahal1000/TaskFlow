@@ -38,3 +38,13 @@ class UserAuthAPITests(APITestCase):
         response = self.client.get('/api/auth/me/')
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_api_allows_frontend_origin(self):
+        response = self.client.options(
+            '/api/auth/register/',
+            HTTP_ORIGIN='http://localhost:5173',
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('Access-Control-Allow-Origin', response.headers)
