@@ -590,33 +590,303 @@ function ProjectsPage() {
 }
 
 function TasksPage() {
+  const [projects, setProjects] = useState([])
+  const [tasks, setTasks] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [deleteId, setDeleteId] = useState(null)
+  const [draft, setDraft] = useState({
+    project: '',
+    title: '',
+    description: '',
+    status: 'todo',
+    priority: 'medium',
+    due_date: '',
+  })
+
+  const loadProjects = async () => {
+    try {
+      const { data } = await api.get('/projects/')
+      const list = Array.isArray(data) ? data : data.results || []
+      setProjects(list)
+
+      if (!draft.project && list.length > 0) {
+        setDraft((current) => ({ ...current, project: String(list[0].id) }))
+      }
+    } catch (err) {
+      setError('Unable to load project options right now.')
+    }
+  }
+
+  const loadTasks = async () => {
+    setLoading(true)
+    setError('')
+
+    try {
+      const { data } = await api.get('/tasks/')
+      const list = Array.isArray(data) ? data : data.results || []
+      setTasks(list)
+    } catch (err) {
+      setError('Unable to load tasks right now. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadProjects()
+    loadTasks()
+  }, [])
+
+  const resetDraft = () => {
+    const defaultProject = projects[0]?.id ? String(projects[0].id) : ''
+    setDraft({
+      project: defaultProject,
+      title: '',
+      description: '',
+      status: 'todo',
+      priority: 'medium',
+      due_date: '',
+    })
+    setEditingId(null)
+  }
+
+  const handleChange = (event) => {
+    const { name, value } = event.target
+    setDraft((current) => ({ ...current, [name]: value }))
+  }
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+
+    if (!draft.project) {
+      setError('Choose a project before creating a task.')
+      return
+    }
+
+    if (!draft.title.trim()) {
+      setError('Task title is required.')
+      return
+    }
+
+    const payload = {
+      ...draft,
+      project: Number(draft.project),
+      due_date: draft.due_date || null,
+    }
+
+    try {
+      if (editingId) {
+        await api.patch(`/tasks/${editingId}/`, payload)
+      } else {
+        await api.post('/tasks/', payload)
+      }
+
+      resetDraft()
+      await loadTasks()
+    } catch (err) {
+      const message = err.response?.data?.non_field_errors?.[0] || err.response?.data?.detail || 'Task save failed.'
+      setError(message)
+    }
+  }
+
+  const handleEdit = (task) => {
+    setEditingId(task.id)
+    setDraft({
+      project: String(task.project),
+      title: task.title,
+      description: task.description || '',
+      status: task.status,
+      priority: task.priority,
+      due_date: task.due_date || '',
+    })
+    setError('')
+  }
+
+  const handleDelete = async () => {
+    if (!deleteId) return
+
+    try {
+      await api.delete(`/tasks/${deleteId}/`)
+      setDeleteId(null)
+      await loadTasks()
+    } catch (err) {
+      setError('The task could not be deleted.')
+    }
+  }
+
+  const projectNameMap = projects.reduce((map, project) => {
+    map[project.id] = project.name
+    return map
+  }, {})
+
   return (
-    <div className="panel full-panel">
-      <div className="panel-header">
-        <h3>Task board</h3>
-        <button type="button" className="ghost-button">Add task</button>
+    <div className="task-page">
+      <div className="panel task-form-panel">
+        <div className="panel-header">
+          <h3>{editingId ? 'Edit task' : 'Create task'}</h3>
+          {editingId && (
+            <button type="button" className="ghost-button" onClick={resetDraft}>
+              Cancel
+            </button>
+          )}
+        </div>
+
+        <form className="task-form" onSubmit={handleSubmit}>
+          <label>
+            Project
+            <select name="project" value={draft.project} onChange={handleChange}>
+              <option value="">Select a project</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Title
+            <input
+              name="title"
+              value={draft.title}
+              onChange={handleChange}
+              placeholder="Draft onboarding email"
+            />
+          </label>
+
+          <label>
+            Description
+            <textarea
+              name="description"
+              value={draft.description}
+              onChange={handleChange}
+              placeholder="Describe the task or expected outcome"
+              rows="4"
+            />
+          </label>
+
+          <div className="task-form-row">
+            <label>
+              Status
+              <select name="status" value={draft.status} onChange={handleChange}>
+                <option value="todo">To Do</option>
+                <option value="in_progress">In Progress</option>
+                <option value="blocked">Blocked</option>
+                <option value="done">Done</option>
+              </select>
+            </label>
+
+            <label>
+              Priority
+              <select name="priority" value={draft.priority} onChange={handleChange}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </label>
+          </div>
+
+          <label>
+            Due date
+            <input
+              type="date"
+              name="due_date"
+              value={draft.due_date}
+              onChange={handleChange}
+            />
+          </label>
+
+          {error && <p className="auth-error">{error}</p>}
+
+          <button type="submit" className="primary-button">
+            {editingId ? 'Save changes' : 'Create task'}
+          </button>
+        </form>
       </div>
 
-      <table className="task-table">
-        <thead>
-          <tr>
-            <th>Task</th>
-            <th>Status</th>
-            <th>Priority</th>
-          </tr>
-        </thead>
-        <tbody>
-          {taskRows.map((task) => (
-            <tr key={task.title}>
-              <td>{task.title}</td>
-              <td>{task.status}</td>
-              <td>
-                <span className={`priority ${task.priority.toLowerCase()}`}>{task.priority}</span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="panel task-list-panel">
+        <div className="panel-header">
+          <h3>Task board</h3>
+          <button type="button" className="ghost-button" onClick={loadTasks}>
+            Refresh
+          </button>
+        </div>
+
+        {loading && <div className="empty-state compact">Loading tasks...</div>}
+
+        {!loading && error && <div className="empty-state compact error-box">{error}</div>}
+
+        {!loading && !error && tasks.length === 0 && (
+          <div className="empty-state compact">
+            <p>No tasks yet. Create your first task to get started.</p>
+          </div>
+        )}
+
+        {!loading && !error && tasks.length > 0 && (
+          <table className="task-table">
+            <thead>
+              <tr>
+                <th>Task</th>
+                <th>Project</th>
+                <th>Status</th>
+                <th>Priority</th>
+                <th>Due</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.map((task) => (
+                <tr key={task.id}>
+                  <td>
+                    <strong>{task.title}</strong>
+                    <div className="task-description">{task.description || 'No description provided.'}</div>
+                  </td>
+                  <td>{projectNameMap[task.project] || 'Unknown project'}</td>
+                  <td>
+                    <span className={`status-pill ${task.status}`}>
+                      {task.status.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`priority ${task.priority.toLowerCase()}`}>{task.priority}</span>
+                  </td>
+                  <td>{task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No date'}</td>
+                  <td>
+                    <div className="table-actions">
+                      <button type="button" className="ghost-button" onClick={() => handleEdit(task)}>
+                        Edit
+                      </button>
+                      <button type="button" className="link-button danger" onClick={() => setDeleteId(task.id)}>
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {deleteId && (
+        <div className="modal-backdrop" onClick={() => setDeleteId(null)}>
+          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <h3>Delete this task?</h3>
+            <p>The task will be removed from your board immediately.</p>
+            <div className="modal-actions">
+              <button type="button" className="ghost-button" onClick={() => setDeleteId(null)}>
+                Cancel
+              </button>
+              <button type="button" className="primary-button danger-button" onClick={handleDelete}>
+                Delete task
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

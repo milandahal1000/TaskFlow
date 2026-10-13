@@ -19,10 +19,10 @@ Status: Completed
 Status: Completed
 
 ## Phase 7 — Project management
-Status: Not started
+Status: Completed
 
 ## Phase 8 — Task management
-Status: Not started
+Status: Completed
 
 ## Phase 9 — Dashboard
 Status: Not started
