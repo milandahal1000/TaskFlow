@@ -281,6 +281,10 @@
   padding: 20px;
 }
 
+.empty-state.compact {
+  min-height: 160px;
+}
+
 .panel-header {
   display: flex;
   align-items: center;

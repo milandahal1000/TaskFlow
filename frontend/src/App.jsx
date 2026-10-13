@@ -324,6 +324,89 @@ function AuthenticatedApp({ user, onLogout, theme, setTheme }) {
 }
 
 function DashboardPage() {
+  const [projects, setProjects] = useState([])
+  const [tasks, setTasks] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      setLoading(true)
+      setError('')
+
+      try {
+        const [projectsResponse, tasksResponse] = await Promise.all([
+          api.get('/projects/'),
+          api.get('/tasks/'),
+        ])
+
+        const projectList = Array.isArray(projectsResponse.data)
+          ? projectsResponse.data
+          : projectsResponse.data.results || []
+        const taskList = Array.isArray(tasksResponse.data)
+          ? tasksResponse.data
+          : tasksResponse.data.results || []
+
+        setProjects(projectList)
+        setTasks(taskList)
+      } catch (err) {
+        setError('Unable to load dashboard data right now.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadDashboardData()
+  }, [])
+
+  const openTasks = tasks.filter((task) => task.status !== 'done').length
+  const blockedTasks = tasks.filter((task) => task.status === 'blocked').length
+  const upcomingTasks = tasks.filter((task) => {
+    if (!task.due_date) return false
+    const due = new Date(task.due_date)
+    const today = new Date()
+    const weekFromNow = new Date()
+    weekFromNow.setDate(today.getDate() + 7)
+    return due >= today && due <= weekFromNow
+  }).length
+
+  const completionRate = tasks.length
+    ? Math.round((tasks.filter((task) => task.status === 'done').length / tasks.length) * 100)
+    : 0
+
+  const progressCards = projects.map((project) => {
+    const projectTasks = tasks.filter((task) => Number(task.project) === Number(project.id))
+    const doneCount = projectTasks.filter((task) => task.status === 'done').length
+    const progress = projectTasks.length ? Math.round((doneCount / projectTasks.length) * 100) : 12
+
+    return {
+      id: project.id,
+      name: project.name,
+      owner: 'You',
+      due: project.updated_at ? new Date(project.updated_at).toLocaleDateString() : 'No date',
+      progress,
+    }
+  })
+
+  const activityFeed = tasks.slice(0, 4).map((task) => (
+    `${task.title} is marked as ${task.status.replace('_', ' ')}`
+  ))
+
+  const overviewStats = [
+    { label: 'Open tasks', value: String(openTasks), tone: 'primary' },
+    { label: 'On track', value: `${completionRate}%`, tone: 'success' },
+    { label: 'Upcoming', value: String(upcomingTasks).padStart(2, '0'), tone: 'warning' },
+    { label: 'Blocked', value: String(blockedTasks).padStart(2, '0'), tone: 'danger' },
+  ]
+
+  if (loading) {
+    return <div className="empty-state compact">Loading dashboard...</div>
+  }
+
+  if (error) {
+    return <div className="empty-state compact error-box">{error}</div>
+  }
+
   return (
     <div className="page-grid">
       <section className="stats-grid">
@@ -343,21 +426,25 @@ function DashboardPage() {
           </div>
 
           <div className="project-list">
-            {projectCards.map((project) => (
-              <div className="project-item" key={project.name}>
-                <div className="project-meta">
-                  <div>
-                    <strong>{project.name}</strong>
-                    <span>{project.owner}</span>
+            {progressCards.length === 0 ? (
+              <div className="empty-state compact">No project data yet.</div>
+            ) : (
+              progressCards.map((project) => (
+                <div className="project-item" key={project.id}>
+                  <div className="project-meta">
+                    <div>
+                      <strong>{project.name}</strong>
+                      <span>{project.owner}</span>
+                    </div>
+                    <span>{project.due}</span>
                   </div>
-                  <span>{project.due}</span>
+                  <div className="progress-bar" aria-label={`${project.name} progress`}>
+                    <span style={{ width: `${project.progress}%` }} />
+                  </div>
+                  <small>{project.progress}% complete</small>
                 </div>
-                <div className="progress-bar" aria-label={`${project.name} progress`}>
-                  <span style={{ width: `${project.progress}%` }} />
-                </div>
-                <small>{project.progress}% complete</small>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -367,11 +454,15 @@ function DashboardPage() {
             <button type="button" className="link-button">Filter</button>
           </div>
 
-          <ul className="activity-list">
-            {activityFeed.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
+          {activityFeed.length === 0 ? (
+            <div className="empty-state compact">No recent task updates.</div>
+          ) : (
+            <ul className="activity-list">
+              {activityFeed.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
     </div>
