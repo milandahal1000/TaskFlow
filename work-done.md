@@ -1,16 +1,16 @@
 # Work Done Log
 
 ## Phase 1 — Environment setup
-Status: In progress
+Status: Completed
 
 ## Phase 2 — Models and database
-Status: Not started
+Status: Completed
 
 ## Phase 3 — JWT authentication
-Status: Not started
+Status: Completed
 
 ## Phase 4 — Backend APIs
-Status: Not started
+Status: Completed
 
 ## Phase 5 — Frontend foundation and design system
 Status: Not started
