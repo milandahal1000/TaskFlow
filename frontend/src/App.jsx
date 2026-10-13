@@ -379,28 +379,212 @@ function DashboardPage() {
 }
 
 function ProjectsPage() {
+  const [projects, setProjects] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [deleteId, setDeleteId] = useState(null)
+  const [draft, setDraft] = useState({
+    name: '',
+    description: '',
+    status: 'planning',
+  })
+
+  const loadProjects = async () => {
+    setLoading(true)
+    setError('')
+
+    try {
+      const { data } = await api.get('/projects/')
+      const list = Array.isArray(data) ? data : data.results || []
+      setProjects(list)
+    } catch (err) {
+      setError('Unable to load projects right now. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadProjects()
+  }, [])
+
+  const resetDraft = () => {
+    setDraft({ name: '', description: '', status: 'planning' })
+    setEditingId(null)
+  }
+
+  const handleChange = (event) => {
+    const { name, value } = event.target
+    setDraft((current) => ({ ...current, [name]: value }))
+  }
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+
+    if (!draft.name.trim()) {
+      setError('Project name is required.')
+      return
+    }
+
+    try {
+      if (editingId) {
+        await api.patch(`/projects/${editingId}/`, draft)
+      } else {
+        await api.post('/projects/', draft)
+      }
+
+      resetDraft()
+      await loadProjects()
+    } catch (err) {
+      const message = err.response?.data?.non_field_errors?.[0] || err.response?.data?.detail || 'Project save failed.'
+      setError(message)
+    }
+  }
+
+  const handleEdit = (project) => {
+    setEditingId(project.id)
+    setDraft({
+      name: project.name,
+      description: project.description || '',
+      status: project.status,
+    })
+    setError('')
+  }
+
+  const handleDelete = async () => {
+    if (!deleteId) return
+
+    try {
+      await api.delete(`/projects/${deleteId}/`)
+      setDeleteId(null)
+      resetDraft()
+      await loadProjects()
+    } catch (err) {
+      setError('The project could not be deleted.')
+    }
+  }
+
   return (
-    <div className="panel full-panel">
-      <div className="panel-header">
-        <h3>Projects</h3>
-        <button type="button" className="ghost-button">Create project</button>
+    <div className="project-page">
+      <div className="panel project-form-panel">
+        <div className="panel-header">
+          <h3>{editingId ? 'Edit project' : 'Create project'}</h3>
+          {editingId && (
+            <button type="button" className="ghost-button" onClick={resetDraft}>
+              Cancel
+            </button>
+          )}
+        </div>
+
+        <form className="project-form" onSubmit={handleSubmit}>
+          <label>
+            Project name
+            <input
+              name="name"
+              value={draft.name}
+              onChange={handleChange}
+              placeholder="Launch campaign"
+            />
+          </label>
+
+          <label>
+            Description
+            <textarea
+              name="description"
+              value={draft.description}
+              onChange={handleChange}
+              placeholder="Brief summary of the project"
+              rows="4"
+            />
+          </label>
+
+          <label>
+            Status
+            <select name="status" value={draft.status} onChange={handleChange}>
+              <option value="planning">Planning</option>
+              <option value="in_progress">In Progress</option>
+              <option value="on_hold">On Hold</option>
+              <option value="completed">Completed</option>
+            </select>
+          </label>
+
+          {error && <p className="auth-error">{error}</p>}
+
+          <button type="submit" className="primary-button">
+            {editingId ? 'Save changes' : 'Create project'}
+          </button>
+        </form>
       </div>
 
-      <div className="card-grid">
-        {projectCards.map((project) => (
-          <article className="mini-card" key={project.name}>
-            <div className="mini-card-top">
-              <strong>{project.name}</strong>
-              <span className="pill">{project.due}</span>
-            </div>
-            <p>{project.owner}</p>
-            <div className="progress-bar" aria-label={`${project.name} progress`}>
-              <span style={{ width: `${project.progress}%` }} />
-            </div>
-            <small>{project.progress}% complete</small>
-          </article>
-        ))}
+      <div className="panel project-list-panel">
+        <div className="panel-header">
+          <h3>My projects</h3>
+          <button type="button" className="ghost-button" onClick={loadProjects}>
+            Refresh
+          </button>
+        </div>
+
+        {loading && <div className="empty-state compact">Loading projects...</div>}
+
+        {!loading && error && <div className="empty-state compact error-box">{error}</div>}
+
+        {!loading && !error && projects.length === 0 && (
+          <div className="empty-state compact">
+            <p>No projects yet. Create your first one to begin tracking work.</p>
+          </div>
+        )}
+
+        {!loading && !error && projects.length > 0 && (
+          <div className="project-grid">
+            {projects.map((project) => (
+              <article className="mini-card" key={project.id}>
+                <div className="mini-card-top">
+                  <strong>{project.name}</strong>
+                  <span className="pill">{project.status.replace('_', ' ')}</span>
+                </div>
+
+                <p>{project.description || 'No description yet.'}</p>
+
+                <div className="project-meta-row">
+                  <span>Updated</span>
+                  <strong>{new Date(project.updated_at).toLocaleDateString()}</strong>
+                </div>
+
+                <div className="progress-bar">
+                  <span style={{ width: `${project.tasks?.length ? Math.min(100, (project.tasks.length / 5) * 100) : 12}%` }} />
+                </div>
+
+                <div className="card-actions">
+                  <button type="button" className="ghost-button" onClick={() => handleEdit(project)}>
+                    Edit
+                  </button>
+                  <button type="button" className="link-button danger" onClick={() => setDeleteId(project.id)}>
+                    Delete
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </div>
+
+      {deleteId && (
+        <div className="modal-backdrop" onClick={() => setDeleteId(null)}>
+          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <h3>Delete this project?</h3>
+            <p>This action cannot be undone.</p>
+            <div className="modal-actions">
+              <button type="button" className="ghost-button" onClick={() => setDeleteId(null)}>
+                Cancel
+              </button>
+              <button type="button" className="primary-button danger-button" onClick={handleDelete}>
+                Delete project
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

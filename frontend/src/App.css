@@ -293,6 +293,111 @@
   font-size: 1.2rem;
 }
 
+.project-page {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 20px;
+}
+
+.project-form-panel,
+.project-list-panel {
+  min-height: 260px;
+}
+
+.project-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.project-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.project-form input,
+.project-form textarea,
+.project-form select {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+.project-form textarea {
+  resize: vertical;
+  min-height: 110px;
+}
+
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.project-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+}
+
+.card-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.link-button.danger,
+.danger-button {
+  color: var(--danger);
+}
+
+.compact {
+  min-height: 120px;
+}
+
+.error-box {
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.04);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 20;
+}
+
+.modal-card {
+  width: min(100%, 420px);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}
+
 .project-list,
 .activity-list,
 .settings-list {
