@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Navigate, NavLink, Route, Routes, useNavigate, useLocation } from 'react-router-dom'
 import api from './api/client'
 import './App.css'
 
@@ -255,6 +255,8 @@ function AuthPage({ mode, onLogin, onRegister }) {
 }
 
 function AuthenticatedApp({ user, onLogout, theme, setTheme }) {
+  const navigate = useNavigate()
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -297,7 +299,11 @@ function AuthenticatedApp({ user, onLogout, theme, setTheme }) {
           </div>
 
           <div className="topbar-actions">
-            <button type="button" className="ghost-button">
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => navigate('/projects?new=true')}
+            >
               New project
             </button>
             <button
@@ -316,7 +322,7 @@ function AuthenticatedApp({ user, onLogout, theme, setTheme }) {
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings" element={<SettingsPage user={user} theme={theme} setTheme={setTheme} onLogout={onLogout} />} />
         </Routes>
       </main>
     </div>
@@ -470,6 +476,8 @@ function DashboardPage() {
 }
 
 function ProjectsPage() {
+  const location = useLocation()
+  const formRef = useRef(null)
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -499,6 +507,15 @@ function ProjectsPage() {
   useEffect(() => {
     loadProjects()
   }, [])
+
+  useEffect(() => {
+    const shouldOpenCreate = new URLSearchParams(location.search).get('new') === 'true'
+
+    if (shouldOpenCreate) {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setError('')
+    }
+  }, [location.search])
 
   const resetDraft = () => {
     setDraft({ name: '', description: '', status: 'planning' })
@@ -558,7 +575,7 @@ function ProjectsPage() {
 
   return (
     <div className="project-page">
-      <div className="panel project-form-panel">
+      <div ref={formRef} className="panel project-form-panel">
         <div className="panel-header">
           <h3>{editingId ? 'Edit project' : 'Create project'}</h3>
           {editingId && (
@@ -996,22 +1013,191 @@ function ReportsPage() {
   )
 }
 
-function SettingsPage() {
+function SettingsPage({ user, theme, setTheme, onLogout }) {
+  const [isPasswordModalOpen, setPasswordModalOpen] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({
+    old_password: '',
+    new_password: '',
+    confirm_password: '',
+  })
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSuccess, setPasswordSuccess] = useState('')
+  const [isSubmittingPassword, setIsSubmittingPassword] = useState(false)
+
+  const initials = (user?.username || 'TF')
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+
+  const resetPasswordForm = () => {
+    setPasswordForm({ old_password: '', new_password: '', confirm_password: '' })
+    setPasswordError('')
+    setPasswordSuccess('')
+  }
+
+  const handlePasswordSubmit = async (event) => {
+    event.preventDefault()
+    setPasswordError('')
+    setPasswordSuccess('')
+
+    if (!passwordForm.old_password || !passwordForm.new_password || !passwordForm.confirm_password) {
+      setPasswordError('Please complete all password fields.')
+      return
+    }
+
+    if (passwordForm.new_password !== passwordForm.confirm_password) {
+      setPasswordError('New passwords do not match.')
+      return
+    }
+
+    if (passwordForm.new_password.length < 8) {
+      setPasswordError('New password must be at least 8 characters long.')
+      return
+    }
+
+    setIsSubmittingPassword(true)
+
+    try {
+      await api.put('/auth/change-password/', {
+        old_password: passwordForm.old_password,
+        new_password: passwordForm.new_password,
+      })
+
+      setPasswordSuccess('Password updated successfully.')
+      setPasswordForm({ old_password: '', new_password: '', confirm_password: '' })
+    } catch (error) {
+      const message = error.response?.data?.detail || error.response?.data?.old_password?.[0] || 'Unable to update your password right now.'
+      setPasswordError(message)
+    } finally {
+      setIsSubmittingPassword(false)
+    }
+  }
+
   return (
-    <div className="panel full-panel">
+    <div className="panel full-panel settings-panel">
       <div className="panel-header">
         <h3>Settings</h3>
       </div>
-      <div className="settings-list">
-        <div>
-          <span>Theme preference</span>
-          <strong>Persisted in local storage</strong>
+
+      <div className="profile-card">
+        <div className="profile-avatar" aria-label="Profile picture">{initials}</div>
+        <div className="profile-details">
+          <strong>{user?.username || 'TaskFlow user'}</strong>
+          <span>{user?.email || 'No email available'}</span>
         </div>
+      </div>
+
+      <div className="settings-actions">
+        <button type="button" className="primary-button" onClick={() => setPasswordModalOpen(true)}>
+          Change password
+        </button>
+        <button type="button" className="logout-button" onClick={onLogout}>
+          Log out
+        </button>
+      </div>
+
+      {passwordSuccess && <p className="settings-success">{passwordSuccess}</p>}
+
+      <div className="settings-list">
+        <div className="setting-row">
+          <div>
+            <span>Theme preference</span>
+            <strong>Current theme: {theme === 'dark' ? 'Dark' : 'Light'}</strong>
+          </div>
+          <button
+            type="button"
+            className="theme-toggle settings-theme-toggle"
+            aria-label="Toggle color theme"
+            onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+          >
+            {theme === 'dark' ? '☀️ Light mode' : '🌙 Dark mode'}
+          </button>
+        </div>
+
+        <div>
+          <span>Account email</span>
+          <strong>{user?.email || 'No email available'}</strong>
+        </div>
+
+        <div>
+          <span>Profile picture</span>
+          <strong>Auto-generated avatar</strong>
+        </div>
+
         <div>
           <span>Team workspace</span>
           <strong>TaskFlow Portfolio</strong>
         </div>
       </div>
+
+      {isPasswordModalOpen && (
+        <div className="modal-backdrop" onClick={() => {
+          setPasswordModalOpen(false)
+          resetPasswordForm()
+        }}>
+          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <h3>Change password</h3>
+
+            <form className="password-form" onSubmit={handlePasswordSubmit}>
+              <label>
+                Current password
+                <input
+                  type="password"
+                  value={passwordForm.old_password}
+                  onChange={(event) =>
+                    setPasswordForm((current) => ({ ...current, old_password: event.target.value }))
+                  }
+                  placeholder="Enter current password"
+                />
+              </label>
+
+              <label>
+                New password
+                <input
+                  type="password"
+                  value={passwordForm.new_password}
+                  onChange={(event) =>
+                    setPasswordForm((current) => ({ ...current, new_password: event.target.value }))
+                  }
+                  placeholder="Enter new password"
+                />
+              </label>
+
+              <label>
+                Confirm new password
+                <input
+                  type="password"
+                  value={passwordForm.confirm_password}
+                  onChange={(event) =>
+                    setPasswordForm((current) => ({ ...current, confirm_password: event.target.value }))
+                  }
+                  placeholder="Confirm new password"
+                />
+              </label>
+
+              {passwordError && <p className="auth-error">{passwordError}</p>}
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => {
+                    setPasswordModalOpen(false)
+                    resetPasswordForm()
+                  }}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="primary-button" disabled={isSubmittingPassword}>
+                  {isSubmittingPassword ? 'Updating...' : 'Update password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

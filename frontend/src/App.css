@@ -666,6 +666,28 @@
   gap: 18px;
 }
 
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.settings-actions .logout-button {
+  margin-top: 0;
+  width: auto;
+}
+
+.settings-success {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: var(--success);
+  font-weight: 600;
+}
+
 .profile-card {
   display: flex;
   align-items: center;
@@ -716,6 +738,28 @@
 
 .settings-theme-toggle {
   min-width: 150px;
+}
+
+.password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.password-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.password-form input {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-soft);
+  color: var(--text);
+  padding: 12px 14px;
 }
 
 @media (max-width: 1024px) {

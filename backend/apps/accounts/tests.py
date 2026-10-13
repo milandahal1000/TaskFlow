@@ -39,6 +39,27 @@ class UserAuthAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_change_password_requires_auth_and_updates_user(self):
+        user = get_user_model().objects.create_user(
+            username='charlie',
+            email='charlie@example.com',
+            password='OldPassword123!',
+        )
+
+        self.client.force_authenticate(user=user)
+        response = self.client.put(
+            '/api/auth/change-password/',
+            {
+                'old_password': 'OldPassword123!',
+                'new_password': 'NewPassword456!',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertTrue(user.check_password('NewPassword456!'))
+
     def test_api_allows_frontend_origin(self):
         response = self.client.options(
             '/api/auth/register/',

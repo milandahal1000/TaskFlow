@@ -2,7 +2,7 @@ from rest_framework import generics, permissions
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .serializers import RegisterSerializer, UserSerializer
+from .serializers import PasswordChangeSerializer, RegisterSerializer, UserSerializer
 
 
 class RegisterUserView(generics.CreateAPIView):
@@ -34,3 +34,14 @@ class LogoutView(generics.GenericAPIView):
             return Response({'detail': 'Invalid refresh token.'}, status=400)
 
         return Response(status=204)
+
+
+class ChangePasswordView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = PasswordChangeSerializer
+
+    def put(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({'detail': 'Password updated successfully.'}, status=200)
